@@ -84,12 +84,26 @@ impl Editor {
                 return Ok(Key::Char(b'\x1b'));
             }
 
-            match s[1] {
-                b'A' => return Ok(Key::Up),
-                b'B' => return Ok(Key::Down),
-                b'C' => return Ok(Key::Right),
-                b'D' => return Ok(Key::Left),
-                _ => return Ok(Key::Char(b'\x1b')),
+            if s[1] >= b'0' && s[1] <= b'9' {
+                match self.read_char() {
+                    Some(c) => s[2] = c,
+                    _ => return Ok(Key::Char(b'\x1b'))
+                }
+                if s[2] == b'~' {
+                    match s[1] {
+                        b'5' => return Ok(Key::PageUp),
+                        b'6' => return Ok(Key::PageDown),
+                        _ => return Ok(Key::Char(b'\x1b'))
+                    }
+                }
+            } else {
+                match s[1] {
+                    b'A' => return Ok(Key::Up),
+                    b'B' => return Ok(Key::Down),
+                    b'C' => return Ok(Key::Right),
+                    b'D' => return Ok(Key::Left),
+                    _ => return Ok(Key::Char(b'\x1b')),
+                }
             }
         }
 
@@ -130,6 +144,11 @@ impl Editor {
         }
         match c {
             Key::Up | Key::Down | Key::Left | Key::Right => self.move_cursor(c),
+            Key::PageUp | Key::PageDown => {
+                for _ in 0..self.tsize.rows {
+                    self.move_cursor(if c == Key::PageUp { Key::Up } else { Key::Down });
+                }
+            }
             _ => {}
         }
         Ok(())
