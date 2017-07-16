@@ -14,6 +14,8 @@ pub enum Key {
     Right,
     Up,
     Down,
+    PageUp,
+    PageDown,
 }
 
 #[inline(always)]
@@ -68,8 +70,18 @@ impl Editor {
 
         if buf[0] == b'\x1b' {
             let mut s = [0;3];
-            if self.stdin.read(&mut s)? < 2 || s[0] != b'[' {
-                return Ok(Key::Char(b'\x1b'))
+            match self.read_char() {
+                Some(c) => s[0] = c,
+                _ => return Ok(Key::Char(b'\x1b'))
+            }
+
+            match self.read_char() {
+                Some(c) => s[1] = c,
+                _ => return Ok(Key::Char(b'\x1b'))
+            }
+
+            if s[0] != b'[' {
+                return Ok(Key::Char(b'\x1b'));
             }
 
             match s[1] {
@@ -211,6 +223,16 @@ impl Editor {
         self.write("\x1b[2J\x1b[H").unwrap();
         write!(io::stderr(), "{}", message).unwrap();
         self.exit(1)
+    }
+
+    fn read_char(&mut self) -> Option<u8> {
+        let mut b = [0;1];
+        let c = self.stdin.read(&mut b).unwrap_or(0);
+        if c == 1 {
+            Some(b[0])
+        } else {
+            None
+        }
     }
 }
 
