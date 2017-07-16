@@ -14,6 +14,9 @@ pub enum Key {
     Right,
     Up,
     Down,
+    Del,
+    Home,
+    End,
     PageUp,
     PageDown,
 }
@@ -80,29 +83,38 @@ impl Editor {
                 _ => return Ok(Key::Char(b'\x1b'))
             }
 
-            if s[0] != b'[' {
-                return Ok(Key::Char(b'\x1b'));
-            }
-
-            if s[1] >= b'0' && s[1] <= b'9' {
-                match self.read_char() {
-                    Some(c) => s[2] = c,
-                    _ => return Ok(Key::Char(b'\x1b'))
-                }
-                if s[2] == b'~' {
-                    match s[1] {
-                        b'5' => return Ok(Key::PageUp),
-                        b'6' => return Ok(Key::PageDown),
+            if s[0] == b'[' {
+                if s[1] >= b'0' && s[1] <= b'9' {
+                    match self.read_char() {
+                        Some(c) => s[2] = c,
                         _ => return Ok(Key::Char(b'\x1b'))
                     }
+                    if s[2] == b'~' {
+                        match s[1] {
+                            b'1' | b'7' => return Ok(Key::Home),
+                            b'2' | b'8' => return Ok(Key::End),
+                            b'3' => return Ok(Key::Del),
+                            b'5' => return Ok(Key::PageUp),
+                            b'6' => return Ok(Key::PageDown),
+                            _ => return Ok(Key::Char(b'\x1b'))
+                        }
+                    }
+                } else {
+                    match s[1] {
+                        b'A' => return Ok(Key::Up),
+                        b'B' => return Ok(Key::Down),
+                        b'C' => return Ok(Key::Right),
+                        b'D' => return Ok(Key::Left),
+                        b'H' => return Ok(Key::Home),
+                        b'F' => return Ok(Key::End),
+                        _ => return Ok(Key::Char(b'\x1b')),
+                    }
                 }
-            } else {
+            } else if s[0] == b'O' {
                 match s[1] {
-                    b'A' => return Ok(Key::Up),
-                    b'B' => return Ok(Key::Down),
-                    b'C' => return Ok(Key::Right),
-                    b'D' => return Ok(Key::Left),
-                    _ => return Ok(Key::Char(b'\x1b')),
+                    b'H' => return Ok(Key::Home),
+                    b'F' => return Ok(Key::End),
+                    _ => {}
                 }
             }
         }
@@ -149,6 +161,8 @@ impl Editor {
                     self.move_cursor(if c == Key::PageUp { Key::Up } else { Key::Down });
                 }
             }
+            Key::Home => self.cx = 0,
+            Key::End  => self.cx = self.tsize.cols - 1,
             _ => {}
         }
         Ok(())
