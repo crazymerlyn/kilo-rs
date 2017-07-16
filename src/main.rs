@@ -3,6 +3,10 @@ extern crate termsize;
 
 use std::io;
 use std::io::{Read, Write, Result};
+use std::io::{BufReader, BufRead};
+
+use std::fs::File;
+use std::path::Path;
 
 use termios::*;
 use std::str;
@@ -33,6 +37,8 @@ pub struct Editor {
     tsize: termsize::Size,
     cx: u16,
     cy: u16,
+    rows: Vec<String>,
+    rowoff: usize,
 }
 
 impl Editor {
@@ -55,9 +61,17 @@ impl Editor {
             stdin: io::stdin(),
             stdout: io::stdout(),
             tsize: termsize::Size { rows: 25, cols: 80 },
-            cx: 10,
+            cx: 0,
             cy: 0,
+            rows: vec![],
+            rowoff: 0,
         }
+    }
+
+    pub fn open<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+        let file = BufReader::new(File::open(path)?);
+        self.rows = file.lines().map(|x| x.unwrap()).collect();
+        Ok(())
     }
 
     pub fn init(&mut self) {
@@ -140,7 +154,7 @@ impl Editor {
                 }
             }
             Key::Down => {
-                if self.cy < self.tsize.rows - 1 {
+                if (self.cy as usize) < self.rows.len() {
                     self.cy += 1;
                 }
             }
@@ -169,9 +183,10 @@ impl Editor {
     }
 
     pub fn refresh_screen(&mut self) -> Result<()> {
+        self.scroll();
         self.write("\x1b[?25l\x1b[H")?;
         self.draw_rows()?;
-        let command = format!("\x1b[{};{}H", self.cy + 1, self.cx + 1);
+        let command = format!("\x1b[{};{}H", self.cy as usize - self.rowoff + 1, self.cx + 1);
         self.write(command)?;
         self.write("\x1b[?25h")?;
         Ok(())
@@ -180,19 +195,24 @@ impl Editor {
     pub fn draw_rows(&mut self) -> Result<()> {
         let mut s = "".to_string();
         for y in 0..self.tsize.rows {
-            if y == self.tsize.rows / 3 {
-                let welcome = format!("Kilo editor -- version {}", env!("CARGO_PKG_VERSION"));
-                let mut padding = (self.tsize.cols as usize - welcome.len()) / 2;
-                if padding > 0 {
+            let fileoff = y as usize + self.rowoff;
+            if fileoff >= self.rows.len() {
+                if self.rows.is_empty() && y == self.tsize.rows / 3 {
+                    let welcome = format!("Kilo editor -- version {}", env!("CARGO_PKG_VERSION"));
+                    let mut padding = (self.tsize.cols as usize - welcome.len()) / 2;
+                    if padding > 0 {
+                        s += "~";
+                        padding -= 1;
+                    }
+                    for _ in 0..padding {
+                        s += " ";
+                    }
+                    s += welcome.as_str();
+                } else {
                     s += "~";
-                    padding -= 1;
                 }
-                for _ in 0..padding {
-                    s += " ";
-                }
-                s += welcome.as_str();
             } else {
-                s += "~";
+                s += self.rows[fileoff].as_str();
             }
             s += "\x1b[K";
             if y < self.tsize.rows - 1 {
@@ -267,11 +287,23 @@ impl Editor {
             None
         }
     }
+
+    fn scroll(&mut self) {
+        let cy = self.cy as usize;
+        if cy < self.rowoff {
+            self.rowoff = cy;
+        }
+
+        if cy >= self.rowoff + self.tsize.rows as usize {
+            self.rowoff = cy - self.tsize.rows as usize + 1;
+        }
+    }
 }
 
 fn main() {
     let mut editor = Editor::new();
     editor.init();
+    editor.open("Cargo.lock").unwrap();
     loop {
         editor.refresh_screen().unwrap();
         editor.process_key().unwrap();
