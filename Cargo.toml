@@ -1,0 +1,8 @@
+[package]
+authors = ["CrazyMerlyn <crazy.d.merlyn@gmail.com>"]
+name = "kilo"
+version = "0.1.0"
+
+[dependencies]
+termios = "0.2.2"
+termsize = "0.1.4"
