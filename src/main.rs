@@ -11,6 +11,8 @@ use std::path::Path;
 use termios::*;
 use std::str;
 
+const TAB_STOP: usize = 8;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
     Char(u8),
@@ -30,6 +32,26 @@ fn ctrl_key(key: u8) -> Key {
     Key::Char(key & 0x1f)
 }
 
+trait Render {
+    fn render(&self) -> Self;
+}
+
+impl Render for String {
+    fn render(&self) -> String {
+        let mut res = "".to_string();
+
+        for ch in self.chars() {
+            if ch == '\t' {
+                res.push(' ');
+                while res.len() % TAB_STOP != 0 { res.push(' '); };
+            } else {
+                res.push(ch);
+            }
+        }
+        res
+    }
+}
+
 pub struct Editor {
     term: Termios,
     stdin: io::Stdin,
@@ -37,6 +59,7 @@ pub struct Editor {
     tsize: termsize::Size,
     cx: usize,
     cy: usize,
+    rx: usize,
     rows: Vec<String>,
     rowoff: usize,
     coloff: usize,
@@ -64,6 +87,7 @@ impl Editor {
             tsize: termsize::Size { rows: 25, cols: 80 },
             cx: 0,
             cy: 0,
+            rx: 0,
             rows: vec![],
             rowoff: 0,
             coloff: 0,
@@ -208,7 +232,7 @@ impl Editor {
         let command = format!(
             "\x1b[{};{}H",
             self.cy - self.rowoff + 1,
-            self.cx - self.coloff + 1);
+            self.rx - self.coloff + 1);
         self.write(command)?;
         self.write("\x1b[?25h")?;
         Ok(())
@@ -234,8 +258,9 @@ impl Editor {
                     s += "~";
                 }
             } else {
-                if self.coloff < self.rows[fileoff].len() {
-                    let mut line = &self.rows[fileoff][self.coloff..];
+                let row = self.rows[fileoff].render();
+                if self.coloff < row.len() {
+                    let mut line = &row[self.coloff..];
                     if line.len() > self.tsize.cols as usize {
                         line = &line[..self.tsize.cols as usize];
                     }
@@ -317,30 +342,45 @@ impl Editor {
     }
 
     fn scroll(&mut self) {
-        let cy = self.cy;
-        if cy < self.rowoff {
-            self.rowoff = cy;
+        if self.cy < self.rowoff {
+            self.rowoff = self.cy;
         }
 
-        if cy >= self.rowoff + self.tsize.rows as usize {
-            self.rowoff = cy - self.tsize.rows as usize + 1;
+        if self.cy >= self.rowoff + self.tsize.rows as usize {
+            self.rowoff = self.cy - self.tsize.rows as usize + 1;
         }
 
-        let cx = self.cx;
-        if cx < self.coloff {
-            self.coloff = cx;
+        self.rx = 0;
+        if self.cy < self.rows.len() {
+            let (cx, line) = (self.cx, &self.rows[self.cy]);
+            self.rx = self.cx_to_rx(line, cx);
+        }
+        if self.rx < self.coloff {
+            self.coloff = self.rx;
         }
 
-        if cx >= self.coloff + self.tsize.cols as usize {
-            self.coloff = cx - self.tsize.cols as usize + 1;
+        if self.rx >= self.coloff + self.tsize.cols as usize {
+            self.coloff = self.rx - self.tsize.cols as usize + 1;
         }
+    }
+
+    fn cx_to_rx<S: AsRef<str>>(&self, s: S, cx: usize) -> usize {
+        let mut rx = 0;
+        for ch in s.as_ref()[..cx].chars() {
+            if ch == '\t' {
+                rx += TAB_STOP - (rx % TAB_STOP);
+            } else {
+                rx += 1;
+            }
+        }
+        rx
     }
 }
 
 fn main() {
     let mut editor = Editor::new();
     editor.init();
-    editor.open("src/main.rs").unwrap();
+    editor.open("/home/merlyn/programs/rust/os/Makefile").unwrap();
     loop {
         editor.refresh_screen().unwrap();
         editor.process_key().unwrap();
