@@ -35,10 +35,11 @@ pub struct Editor {
     stdin: io::Stdin,
     stdout: io::Stdout,
     tsize: termsize::Size,
-    cx: u16,
-    cy: u16,
+    cx: usize,
+    cy: usize,
     rows: Vec<String>,
     rowoff: usize,
+    coloff: usize,
 }
 
 impl Editor {
@@ -65,6 +66,7 @@ impl Editor {
             cy: 0,
             rows: vec![],
             rowoff: 0,
+            coloff: 0,
         }
     }
 
@@ -141,11 +143,19 @@ impl Editor {
             Key::Left => {
                 if self.cx > 0 {
                     self.cx -= 1;
+                } else if self.cy > 0 {
+                    self.cy -= 1;
+                    self.cx = self.rows[self.cy].len();
                 }
             }
             Key::Right => {
-                if self.cx < self.tsize.cols - 1 {
-                    self.cx += 1;
+                if self.cy < self.rows.len() {
+                    if self.cx < self.rows[self.cy].len() {
+                        self.cx += 1;
+                    } else {
+                        self.cy += 1;
+                        self.cx = 0;
+                    }
                 }
             }
             Key::Up => {
@@ -154,12 +164,21 @@ impl Editor {
                 }
             }
             Key::Down => {
-                if (self.cy as usize) < self.rows.len() {
-                    self.cy += 1;
+                if self.cy < self.rows.len() {
+                       self.cy += 1;
                 }
             }
             _ => {}
-        }
+        };
+
+        let rowlen = if self.rows.len() > self.cy {
+            self.rows[self.cy].len()
+        } else {
+            0
+        };
+        if self.cx > rowlen {
+            self.cx = rowlen;
+        };
     }
 
     pub fn process_key(&mut self) -> Result<()> {
@@ -176,7 +195,7 @@ impl Editor {
                 }
             }
             Key::Home => self.cx = 0,
-            Key::End  => self.cx = self.tsize.cols - 1,
+            Key::End  => self.cx = self.tsize.cols as usize - 1,
             _ => {}
         }
         Ok(())
@@ -186,7 +205,10 @@ impl Editor {
         self.scroll();
         self.write("\x1b[?25l\x1b[H")?;
         self.draw_rows()?;
-        let command = format!("\x1b[{};{}H", self.cy as usize - self.rowoff + 1, self.cx + 1);
+        let command = format!(
+            "\x1b[{};{}H",
+            self.cy - self.rowoff + 1,
+            self.cx - self.coloff + 1);
         self.write(command)?;
         self.write("\x1b[?25h")?;
         Ok(())
@@ -212,7 +234,13 @@ impl Editor {
                     s += "~";
                 }
             } else {
-                s += self.rows[fileoff].as_str();
+                if self.coloff < self.rows[fileoff].len() {
+                    let mut line = &self.rows[fileoff][self.coloff..];
+                    if line.len() > self.tsize.cols as usize {
+                        line = &line[..self.tsize.cols as usize];
+                    }
+                    s += &line;
+                }
             }
             s += "\x1b[K";
             if y < self.tsize.rows - 1 {
@@ -289,7 +317,7 @@ impl Editor {
     }
 
     fn scroll(&mut self) {
-        let cy = self.cy as usize;
+        let cy = self.cy;
         if cy < self.rowoff {
             self.rowoff = cy;
         }
@@ -297,13 +325,22 @@ impl Editor {
         if cy >= self.rowoff + self.tsize.rows as usize {
             self.rowoff = cy - self.tsize.rows as usize + 1;
         }
+
+        let cx = self.cx;
+        if cx < self.coloff {
+            self.coloff = cx;
+        }
+
+        if cx >= self.coloff + self.tsize.cols as usize {
+            self.coloff = cx - self.tsize.cols as usize + 1;
+        }
     }
 }
 
 fn main() {
     let mut editor = Editor::new();
     editor.init();
-    editor.open("Cargo.lock").unwrap();
+    editor.open("src/main.rs").unwrap();
     loop {
         editor.refresh_screen().unwrap();
         editor.process_key().unwrap();
