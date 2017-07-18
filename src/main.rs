@@ -63,6 +63,7 @@ pub struct Editor {
     rows: Vec<String>,
     rowoff: usize,
     coloff: usize,
+    filename: Option<String>,
 }
 
 impl Editor {
@@ -91,18 +92,23 @@ impl Editor {
             rows: vec![],
             rowoff: 0,
             coloff: 0,
+            filename: None,
         }
     }
 
     pub fn open<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-        let file = BufReader::new(File::open(path)?);
+        let file = BufReader::new(File::open(path.as_ref())?);
+        self.filename = path.as_ref().to_str().map(|x| x.to_string());
         self.rows = file.lines().map(|x| x.unwrap()).collect();
         Ok(())
     }
 
     pub fn init(&mut self) {
        match self.get_window_size() {
-           Ok(s) => self.tsize = s,
+           Ok(s) => {
+               self.tsize = s;
+               self.tsize.rows -= 1;
+           }
            _ => self.die("Failed to get window size")
        }
     }
@@ -243,6 +249,7 @@ impl Editor {
         self.scroll();
         self.write("\x1b[?25l\x1b[H")?;
         self.draw_rows()?;
+        self.draw_status_bar()?;
         let command = format!(
             "\x1b[{};{}H",
             self.cy - self.rowoff + 1,
@@ -282,11 +289,37 @@ impl Editor {
                 }
             }
             s += "\x1b[K";
-            if y < self.tsize.rows - 1 {
-                s += "\r\n";
-            }
+            s += "\r\n";
         }
         self.write(s.as_str())?;
+        Ok(())
+    }
+
+    fn draw_status_bar(&mut self) -> Result<()> {
+        let mut s = "".to_string();
+        s += "\x1b[7m";
+        let filedesc = format!(
+            "{:.20} - {} lines",
+            self.filename.as_ref().unwrap_or(&"[No Name]".to_string()),
+            self.rows.len());
+        let linedesc = format!("{}/{}", self.cy + 1, self.rows.len());
+        let line = if filedesc.len() > self.tsize.cols as usize {
+            &filedesc[..self.tsize.cols as usize]
+        } else {
+            &filedesc
+        };
+        s += line;
+
+        for i in line.len()..self.tsize.cols as usize {
+            if self.tsize.cols as usize - i == linedesc.len() {
+                s += &linedesc;
+                break;
+            } else {
+                s.push(' ');
+            }
+        }
+        s += "\x1b[m";
+        self.write(s)?;
         Ok(())
     }
 
