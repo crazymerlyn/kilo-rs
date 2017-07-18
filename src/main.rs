@@ -10,6 +10,8 @@ use std::path::Path;
 
 use termios::*;
 use std::str;
+use std::time::{Instant, Duration};
+use std::ops::Sub;
 
 const TAB_STOP: usize = 8;
 
@@ -64,6 +66,8 @@ pub struct Editor {
     rowoff: usize,
     coloff: usize,
     filename: Option<String>,
+    status_msg: String,
+    status_msg_time: Instant,
 }
 
 impl Editor {
@@ -93,6 +97,8 @@ impl Editor {
             rowoff: 0,
             coloff: 0,
             filename: None,
+            status_msg: "".to_string(),
+            status_msg_time: Instant::now().sub(Duration::from_secs(100)),
         }
     }
 
@@ -107,7 +113,7 @@ impl Editor {
        match self.get_window_size() {
            Ok(s) => {
                self.tsize = s;
-               self.tsize.rows -= 1;
+               self.tsize.rows -= 2;
            }
            _ => self.die("Failed to get window size")
        }
@@ -250,6 +256,7 @@ impl Editor {
         self.write("\x1b[?25l\x1b[H")?;
         self.draw_rows()?;
         self.draw_status_bar()?;
+        self.draw_message_bar()?;
         let command = format!(
             "\x1b[{};{}H",
             self.cy - self.rowoff + 1,
@@ -319,8 +326,28 @@ impl Editor {
             }
         }
         s += "\x1b[m";
+        s += "\r\n";
         self.write(s)?;
         Ok(())
+    }
+
+    fn draw_message_bar(&mut self) -> Result<()> {
+        let mut res = "".to_string();
+        res += "\x1b[K";
+        if Instant::now().duration_since(self.status_msg_time).as_secs() < 5 {
+            res += if self.status_msg.len() > self.tsize.cols as usize {
+                &self.status_msg[..self.tsize.cols as usize]
+            } else {
+                &self.status_msg
+            };
+        }
+        self.write(&res)?;
+        Ok(())
+    }
+
+    fn set_status_msg<S: AsRef<str>>(&mut self, message: S) {
+        self.status_msg = message.as_ref().to_owned();
+        self.status_msg_time = Instant::now();
     }
 
     fn get_cursor_position(&mut self) -> Result<(u16, u16)> {
@@ -428,6 +455,9 @@ fn main() {
     let mut editor = Editor::new();
     editor.init();
     editor.open("src/main.rs").unwrap();
+
+    editor.set_status_msg("HELP: Ctrl-Q = quit");
+
     loop {
         editor.refresh_screen().unwrap();
         editor.process_key().unwrap();
