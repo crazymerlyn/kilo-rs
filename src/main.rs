@@ -214,12 +214,26 @@ impl Editor {
         match c {
             Key::Up | Key::Down | Key::Left | Key::Right => self.move_cursor(c),
             Key::PageUp | Key::PageDown => {
+                if c == Key::PageUp {
+                    self.cy = self.rowoff;
+                } else {
+                    self.cy = self.rowoff + self.tsize.rows as usize - 1;
+                    if self.cy > self.rows.len() {
+                        self.cy = self.rows.len();
+                    }
+                }
                 for _ in 0..self.tsize.rows {
                     self.move_cursor(if c == Key::PageUp { Key::Up } else { Key::Down });
                 }
             }
             Key::Home => self.cx = 0,
-            Key::End  => self.cx = self.tsize.cols as usize - 1,
+            Key::End  => {
+                if self.cy < self.rows.len() {
+                    self.cx = self.rows[self.cy].len();
+                } else {
+                    self.cx = 0;
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -380,7 +394,7 @@ impl Editor {
 fn main() {
     let mut editor = Editor::new();
     editor.init();
-    editor.open("/home/merlyn/programs/rust/os/Makefile").unwrap();
+    editor.open("src/main.rs").unwrap();
     loop {
         editor.refresh_screen().unwrap();
         editor.process_key().unwrap();
