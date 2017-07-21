@@ -273,9 +273,10 @@ impl Editor {
                 }
             }
             Key::Ctrl(b's') => match self.save() {
-                Ok(n) => self.set_status_msg(
+                Ok(Some(n)) => self.set_status_msg(
                     format!("{} bytes written to disk", n)
                     ),
+                Ok(None) => self.set_status_msg("Save aborted"),
                 Err(e) => self.set_status_msg(
                     format!("Can't save! I/O error: {}", e.description())
                     ),
@@ -545,17 +546,50 @@ impl Editor {
         self.rows.join("\n") + "\n"
     }
 
-    pub fn save(&mut self) -> Result<usize> {
-        match self.filename {
-            Some(ref path) => {
-                let mut file = File::create(path)?;
-                let res = file.write(self.rows_to_string().as_bytes());
-                if let Ok(_) = res {
-                    self.dirty = false;
+    pub fn save(&mut self) -> Result<Option<usize>> {
+        let path = match self.filename {
+            Some(ref path) => path.to_owned(),
+            None => match self.prompt("Save as")? {
+                Some(path) => path,
+                None => {
+                    return Ok(None);
                 }
-                return res;
-            },
-            _ => Ok(0),
+            }
+        };
+        let mut file = File::create(path)?;
+        let res = file.write(self.rows_to_string().as_bytes());
+        if let Ok(_) = res {
+            self.dirty = false;
+        }
+        return res.map(Some);
+    }
+
+    fn prompt<S: AsRef<str>>(&mut self, message: S) -> Result<Option<String>> {
+        let message = message.as_ref();
+        let mut input = "".to_string();
+        loop {
+            self.set_status_msg(format!("{}: {}", message, input));
+            self.refresh_screen()?;
+            match self.read_key()? {
+                Key::Del | Key::Backspace | Key::Ctrl(b'h') => {
+                    if input.len() > 0 { input.pop(); };
+                }
+                Key::Return => {
+                    if input.len() > 0 {
+                        self.set_status_msg("");
+                        return Ok(Some(input));
+                    }
+                }
+                Key::Char(b'\x1b') => {
+                    return Ok(None);
+                }
+                Key::Char(c) => {
+                    if c > 31 && c < 127 {
+                        input.push(c as char);
+                    }
+                }
+                _ => {}
+            }
         }
     }
 }
