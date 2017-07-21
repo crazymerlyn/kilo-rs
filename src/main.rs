@@ -282,6 +282,7 @@ impl Editor {
             Key::Char(c) => self.insert_char(c as char),
             _ => {}
         }
+        self.quit_times = QUIT_TIMES;
         Ok(())
     }
 
