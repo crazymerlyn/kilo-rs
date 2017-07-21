@@ -277,7 +277,10 @@ impl Editor {
                     ),
             },
             Key::Char(b'\r') => { /* TODO */ },
-            Key::Backspace | Key::Del | Key::Ctrl(b'h') => {},
+            Key::Backspace | Key::Del | Key::Ctrl(b'h') => {
+                if c == Key::Del { self.move_cursor(Key::Right); };
+                self.del_char();
+            },
             Key::Ctrl(b'l') | Key::Char(b'\x1b') => {},
             Key::Char(c) => self.insert_char(c as char),
             _ => {}
@@ -499,6 +502,23 @@ impl Editor {
 
         self.cx += 1;
 
+        self.dirty = true;
+    }
+
+    fn del_char(&mut self) {
+        if self.cy == self.rows.len() { return; };
+        if self.cx == 0 && self.cy == 0 { return; };
+
+        if self.cx > 0 {
+            self.cx -= 1;
+            let mut row = &mut self.rows[self.cy];
+            *row = row[..self.cx].to_string() + &row[self.cx+1..];
+        } else {
+            self.cx = self.rows[self.cy - 1].len();
+            self.rows[self.cy - 1] += &self.rows[self.cy].clone();
+            self.rows.remove(self.cy);
+            self.cy -= 1;
+        }
         self.dirty = true;
     }
 
