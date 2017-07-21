@@ -66,6 +66,7 @@ pub struct Editor {
     rows: Vec<String>,
     rowoff: usize,
     coloff: usize,
+    dirty: bool,
     filename: Option<String>,
     status_msg: String,
     status_msg_time: Instant,
@@ -98,6 +99,7 @@ impl Editor {
             rows: vec![],
             rowoff: 0,
             coloff: 0,
+            dirty: false,
             filename: None,
             status_msg: "".to_string(),
             status_msg_time: Instant::now().sub(Duration::from_secs(100)),
@@ -108,6 +110,7 @@ impl Editor {
         let file = BufReader::new(File::open(path.as_ref())?);
         self.filename = path.as_ref().to_str().map(|x| x.to_string());
         self.rows = file.lines().map(|x| x.unwrap()).collect();
+        self.dirty = false;
         Ok(())
     }
 
@@ -328,9 +331,10 @@ impl Editor {
         let mut s = "".to_string();
         s += "\x1b[7m";
         let filedesc = format!(
-            "{:.20} - {} lines",
+            "{:.20} - {} lines {}",
             self.filename.as_ref().unwrap_or(&"[No Name]".to_string()),
-            self.rows.len());
+            self.rows.len(),
+            if self.dirty { "(modified)" } else { "" });
         let linedesc = format!("{}/{}", self.cy + 1, self.rows.len());
         let line = if filedesc.len() > self.numcols {
             &filedesc[..self.numcols]
@@ -484,17 +488,23 @@ impl Editor {
         }
 
         self.cx += 1;
+
+        self.dirty = true;
     }
 
     fn rows_to_string(&self) -> String {
         self.rows.join("\n") + "\n"
     }
 
-    pub fn save(&self) -> Result<usize> {
+    pub fn save(&mut self) -> Result<usize> {
         match self.filename {
             Some(ref path) => {
                 let mut file = File::create(path)?;
-                file.write(self.rows_to_string().as_bytes())
+                let res = file.write(self.rows_to_string().as_bytes());
+                if let Ok(_) = res {
+                    self.dirty = false;
+                }
+                return res;
             },
             _ => Ok(0),
         }
