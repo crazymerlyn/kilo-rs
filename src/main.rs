@@ -58,7 +58,8 @@ pub struct Editor {
     term: Termios,
     stdin: io::Stdin,
     stdout: io::Stdout,
-    tsize: termsize::Size,
+    numrows: usize,
+    numcols: usize,
     cx: usize,
     cy: usize,
     rx: usize,
@@ -89,7 +90,8 @@ impl Editor {
             term: original,
             stdin: io::stdin(),
             stdout: io::stdout(),
-            tsize: termsize::Size { rows: 25, cols: 80 },
+            numrows: 25,
+            numcols: 80,
             cx: 0,
             cy: 0,
             rx: 0,
@@ -112,8 +114,8 @@ impl Editor {
     pub fn init(&mut self) {
        match self.get_window_size() {
            Ok(s) => {
-               self.tsize = s;
-               self.tsize.rows -= 2;
+               self.numcols = s.cols as usize;
+               self.numrows = s.rows as usize - 2;
            }
            _ => self.die("Failed to get window size")
        }
@@ -229,12 +231,12 @@ impl Editor {
                 if c == Key::PageUp {
                     self.cy = self.rowoff;
                 } else {
-                    self.cy = self.rowoff + self.tsize.rows as usize - 1;
+                    self.cy = self.rowoff + self.numrows - 1;
                     if self.cy > self.rows.len() {
                         self.cy = self.rows.len();
                     }
                 }
-                for _ in 0..self.tsize.rows {
+                for _ in 0..self.numrows {
                     self.move_cursor(if c == Key::PageUp { Key::Up } else { Key::Down });
                 }
             }
@@ -268,12 +270,12 @@ impl Editor {
 
     pub fn draw_rows(&mut self) -> Result<()> {
         let mut s = "".to_string();
-        for y in 0..self.tsize.rows {
-            let fileoff = y as usize + self.rowoff;
+        for y in 0..self.numrows {
+            let fileoff = y + self.rowoff;
             if fileoff >= self.rows.len() {
-                if self.rows.is_empty() && y == self.tsize.rows / 3 {
+                if self.rows.is_empty() && y == self.numrows / 3 {
                     let welcome = format!("Kilo editor -- version {}", env!("CARGO_PKG_VERSION"));
-                    let mut padding = (self.tsize.cols as usize - welcome.len()) / 2;
+                    let mut padding = (self.numcols - welcome.len()) / 2;
                     if padding > 0 {
                         s += "~";
                         padding -= 1;
@@ -289,8 +291,8 @@ impl Editor {
                 let row = self.rows[fileoff].render();
                 if self.coloff < row.len() {
                     let mut line = &row[self.coloff..];
-                    if line.len() > self.tsize.cols as usize {
-                        line = &line[..self.tsize.cols as usize];
+                    if line.len() > self.numcols {
+                        line = &line[..self.numcols];
                     }
                     s += &line;
                 }
@@ -310,15 +312,15 @@ impl Editor {
             self.filename.as_ref().unwrap_or(&"[No Name]".to_string()),
             self.rows.len());
         let linedesc = format!("{}/{}", self.cy + 1, self.rows.len());
-        let line = if filedesc.len() > self.tsize.cols as usize {
-            &filedesc[..self.tsize.cols as usize]
+        let line = if filedesc.len() > self.numcols {
+            &filedesc[..self.numcols]
         } else {
             &filedesc
         };
         s += line;
 
-        for i in line.len()..self.tsize.cols as usize {
-            if self.tsize.cols as usize - i == linedesc.len() {
+        for i in line.len()..self.numcols {
+            if self.numcols - i == linedesc.len() {
                 s += &linedesc;
                 break;
             } else {
@@ -335,8 +337,8 @@ impl Editor {
         let mut res = "".to_string();
         res += "\x1b[K";
         if Instant::now().duration_since(self.status_msg_time).as_secs() < 5 {
-            res += if self.status_msg.len() > self.tsize.cols as usize {
-                &self.status_msg[..self.tsize.cols as usize]
+            res += if self.status_msg.len() > self.numcols {
+                &self.status_msg[..self.numcols]
             } else {
                 &self.status_msg
             };
@@ -420,8 +422,8 @@ impl Editor {
             self.rowoff = self.cy;
         }
 
-        if self.cy >= self.rowoff + self.tsize.rows as usize {
-            self.rowoff = self.cy - self.tsize.rows as usize + 1;
+        if self.cy >= self.rowoff + self.numrows {
+            self.rowoff = self.cy - self.numrows + 1;
         }
 
         self.rx = 0;
@@ -433,8 +435,8 @@ impl Editor {
             self.coloff = self.rx;
         }
 
-        if self.rx >= self.coloff + self.tsize.cols as usize {
-            self.coloff = self.rx - self.tsize.cols as usize + 1;
+        if self.rx >= self.coloff + self.numcols {
+            self.coloff = self.rx - self.numcols + 1;
         }
     }
 
