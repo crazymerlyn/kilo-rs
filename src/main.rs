@@ -18,6 +18,7 @@ const TAB_STOP: usize = 8;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
     Char(u8),
+    Ctrl(u8),
     Left,
     Right,
     Up,
@@ -27,11 +28,8 @@ pub enum Key {
     End,
     PageUp,
     PageDown,
-}
-
-#[inline(always)]
-fn ctrl_key(key: u8) -> Key {
-    Key::Char(key & 0x1f)
+    Return,
+    Backspace,
 }
 
 trait Render {
@@ -173,6 +171,14 @@ impl Editor {
             }
         }
 
+        if buf[0] == 127 {
+            return Ok(Key::Backspace);
+        }
+
+        if buf[0] & 0x1f == buf[0] {
+            return Ok(Key::Ctrl(buf[0] | 0x60));
+        }
+
         Ok(Key::Char(buf[0]))
     }
 
@@ -222,7 +228,7 @@ impl Editor {
     pub fn process_key(&mut self) -> Result<()> {
         let c = self.read_key()?;
 
-        if c == ctrl_key(b'q') {
+        if c == Key::Ctrl(b'q') {
             self.exit(0);
         }
         match c {
@@ -248,6 +254,10 @@ impl Editor {
                     self.cx = 0;
                 }
             }
+            Key::Char(b'\r') => { /* TODO */ },
+            Key::Backspace | Key::Del | Key::Ctrl(b'h') => {},
+            Key::Ctrl(b'l') | Key::Char(b'\x1b') => {},
+            Key::Char(c) => self.insert_char(c as char),
             _ => {}
         }
         Ok(())
@@ -450,6 +460,24 @@ impl Editor {
             }
         }
         rx
+    }
+
+    fn insert_char(&mut self, c: char) {
+        if self.cy == self.rows.len() {
+            self.rows.push("".to_string());
+        }
+        let mut row = &mut self.rows[self.cy];
+        if self.cx >= row.len() {
+            row.push(c);
+        } else {
+            *row = row[..self.cx].to_string() + c.to_string().as_str() + &row[self.cx..];
+        }
+
+        self.cx += 1;
+    }
+
+    fn rows_to_string(&self) -> String {
+        self.rows.join("\n") + "\n"
     }
 }
 
