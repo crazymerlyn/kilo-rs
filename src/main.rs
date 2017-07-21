@@ -16,6 +16,7 @@ use std::ops::Sub;
 use std::error::Error;
 
 const TAB_STOP: usize = 8;
+const QUIT_TIMES: usize = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
@@ -67,6 +68,7 @@ pub struct Editor {
     rowoff: usize,
     coloff: usize,
     dirty: bool,
+    quit_times: usize,
     filename: Option<String>,
     status_msg: String,
     status_msg_time: Instant,
@@ -100,6 +102,7 @@ impl Editor {
             rowoff: 0,
             coloff: 0,
             dirty: false,
+            quit_times: QUIT_TIMES,
             filename: None,
             status_msg: "".to_string(),
             status_msg_time: Instant::now().sub(Duration::from_secs(100)),
@@ -234,6 +237,12 @@ impl Editor {
         let c = self.read_key()?;
 
         if c == Key::Ctrl(b'q') {
+            if self.dirty && self.quit_times > 0 {
+                let s = format!("WARNING!!! File has unsaved changes. Press Ctrl-Q {} more times to quit", self.quit_times);
+                self.set_status_msg(s);
+                self.quit_times -= 1;
+                return Ok(());
+            }
             self.exit(0);
         }
         match c {
