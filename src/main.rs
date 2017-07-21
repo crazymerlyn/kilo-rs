@@ -254,6 +254,7 @@ impl Editor {
                     self.cx = 0;
                 }
             }
+            Key::Ctrl(b's') => self.save()?,
             Key::Char(b'\r') => { /* TODO */ },
             Key::Backspace | Key::Del | Key::Ctrl(b'h') => {},
             Key::Ctrl(b'l') | Key::Char(b'\x1b') => {},
@@ -479,12 +480,23 @@ impl Editor {
     fn rows_to_string(&self) -> String {
         self.rows.join("\n") + "\n"
     }
+
+    pub fn save(&self) -> Result<()> {
+        match self.filename {
+            Some(ref path) => {
+                let mut file = File::create(path)?;
+                file.write(self.rows_to_string().as_bytes())?;
+                Ok(())
+            },
+            _ => Ok(()),
+        }
+    }
 }
 
 fn main() {
     let mut editor = Editor::new();
     editor.init();
-    editor.open("src/main.rs").unwrap();
+    editor.open("./test.txt").unwrap();
 
     editor.set_status_msg("HELP: Ctrl-Q = quit");
 
