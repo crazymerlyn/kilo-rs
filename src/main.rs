@@ -13,6 +13,8 @@ use std::str;
 use std::time::{Instant, Duration};
 use std::ops::Sub;
 
+use std::error::Error;
+
 const TAB_STOP: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -254,7 +256,14 @@ impl Editor {
                     self.cx = 0;
                 }
             }
-            Key::Ctrl(b's') => self.save()?,
+            Key::Ctrl(b's') => match self.save() {
+                Ok(n) => self.set_status_msg(
+                    format!("{} bytes written to disk", n)
+                    ),
+                Err(e) => self.set_status_msg(
+                    format!("Can't save! I/O error: {}", e.description())
+                    ),
+            },
             Key::Char(b'\r') => { /* TODO */ },
             Key::Backspace | Key::Del | Key::Ctrl(b'h') => {},
             Key::Ctrl(b'l') | Key::Char(b'\x1b') => {},
@@ -481,14 +490,13 @@ impl Editor {
         self.rows.join("\n") + "\n"
     }
 
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> Result<usize> {
         match self.filename {
             Some(ref path) => {
                 let mut file = File::create(path)?;
-                file.write(self.rows_to_string().as_bytes())?;
-                Ok(())
+                file.write(self.rows_to_string().as_bytes())
             },
-            _ => Ok(()),
+            _ => Ok(0),
         }
     }
 }
@@ -498,7 +506,7 @@ fn main() {
     editor.init();
     editor.open("./test.txt").unwrap();
 
-    editor.set_status_msg("HELP: Ctrl-Q = quit");
+    editor.set_status_msg("HELP: Ctrl-S = save | Ctrl-Q = quit");
 
     loop {
         editor.refresh_screen().unwrap();
