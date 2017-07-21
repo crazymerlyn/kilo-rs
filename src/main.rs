@@ -179,6 +179,10 @@ impl Editor {
             }
         }
 
+        if buf[0] == b'\r' {
+            return Ok(Key::Return);
+        }
+
         if buf[0] == 127 {
             return Ok(Key::Backspace);
         }
@@ -276,7 +280,7 @@ impl Editor {
                     format!("Can't save! I/O error: {}", e.description())
                     ),
             },
-            Key::Char(b'\r') => { /* TODO */ },
+            Key::Return => self.insert_newline(),
             Key::Backspace | Key::Del | Key::Ctrl(b'h') => {
                 if c == Key::Del { self.move_cursor(Key::Right); };
                 self.del_char();
@@ -519,6 +523,21 @@ impl Editor {
             self.rows.remove(self.cy);
             self.cy -= 1;
         }
+        self.dirty = true;
+    }
+
+    fn insert_newline(&mut self) {
+        if self.cx == 0 {
+            self.rows.insert(self.cy, "".to_string());
+        } else if self.cx == self.rows[self.cy].len() {
+            self.rows.insert(self.cy + 1, "".to_string());
+        } else {
+            let right = self.rows[self.cy][self.cx..].to_string();
+            self.rows.insert(self.cy + 1, right);
+            self.rows[self.cy] = self.rows[self.cy][..self.cx].to_string();
+        }
+        self.cy += 1;
+        self.cx = 0;
         self.dirty = true;
     }
 
