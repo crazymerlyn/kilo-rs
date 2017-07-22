@@ -566,7 +566,7 @@ impl Editor {
     pub fn save(&mut self) -> Result<Option<usize>> {
         let path = match self.filename {
             Some(ref path) => path.to_owned(),
-            None => match self.prompt("Save as")? {
+            None => match self.prompt("Save as", |_, _, _| {})? {
                 Some(path) => path,
                 None => {
                     return Ok(None);
@@ -581,23 +581,29 @@ impl Editor {
         return res.map(Some);
     }
 
-    fn prompt<S: AsRef<str>>(&mut self, message: S) -> Result<Option<String>> {
+    fn prompt<S: AsRef<str>, F>(&mut self, message: S, mut callback: F) -> Result<Option<String>>
+        where
+            F: FnMut(&mut Editor, &str, Key)
+    {
         let message = message.as_ref();
         let mut input = "".to_string();
         loop {
             self.set_status_msg(format!("{}: {} (ESC to cancel)", message, input));
             self.refresh_screen()?;
-            match self.read_key()? {
+            let c = self.read_key()?;
+            match c {
                 Key::Del | Key::Backspace | Key::Ctrl(b'h') => {
                     if input.len() > 0 { input.pop(); };
                 }
                 Key::Return => {
                     if input.len() > 0 {
                         self.set_status_msg("");
+                        callback(self, &input, c);
                         return Ok(Some(input));
                     }
                 }
                 Key::Char(b'\x1b') => {
+                    callback(self, &input, c);
                     return Ok(None);
                 }
                 Key::Char(c) => {
@@ -607,24 +613,37 @@ impl Editor {
                 }
                 _ => {}
             }
+            callback(self, &input, c);
         }
     }
 
     pub fn find(&mut self) -> Result<()> {
-        let query = match self.prompt("Search")? {
-            Some(s) => s,
-            None => return Ok(()),
-        };
-        for i in 0..self.rows.len() {
-            match self.rows[i].render().find(query.as_str()) {
-                Some(pos) => {
-                    self.cy = i;
-                    self.cx = self.rx_to_cx(self.rows[i].render(), pos);
-                    self.rowoff = self.rows.len();
-                    break;
-                },
-                None => {},
+        let saved_cx = self.cx;
+        let saved_cy = self.cy;
+        let saved_coloff = self.coloff;
+        let saved_rowoff = self.rowoff;
+
+        let query = self.prompt("Search", |editor: &mut Editor, query: &str, key| {
+            if key == Key::Return || key == Key::Char(b'\x1b') {
+                return;
             }
+            for i in 0..editor.rows.len() {
+                match editor.rows[i].render().find(query) {
+                    Some(pos) => {
+                        editor.cy = i;
+                        editor.cx = editor.rx_to_cx(editor.rows[i].render(), pos);
+                        editor.rowoff = editor.rows.len();
+                        break;
+                    },
+                    None => {},
+                }
+            }
+        })?;
+        if query == None {
+            self.cx = saved_cx;
+            self.cy = saved_cy;
+            self.rowoff = saved_rowoff;
+            self.coloff = saved_coloff;
         }
         Ok(())
     }
