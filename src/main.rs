@@ -281,6 +281,7 @@ impl Editor {
                     format!("Can't save! I/O error: {}", e.description())
                     ),
             },
+            Key::Ctrl(b'f') => self.find()?,
             Key::Return => self.insert_newline(),
             Key::Backspace | Key::Del | Key::Ctrl(b'h') => {
                 if c == Key::Del { self.move_cursor(Key::Right); };
@@ -494,6 +495,22 @@ impl Editor {
         rx
     }
 
+    fn rx_to_cx<S: AsRef<str>>(&self, s: S, rx: usize) -> usize {
+        let mut cur_rx = 0;
+        let mut cx = 0;
+
+        for ch in s.as_ref().chars() {
+            if ch == '\t' {
+                cur_rx += TAB_STOP - (cur_rx % TAB_STOP);
+            } else {
+                cur_rx += 1;
+            }
+            if cur_rx > rx { return cx; }
+            cx += 1;
+        }
+        cx
+    }
+
     fn insert_char(&mut self, c: char) {
         if self.cy == self.rows.len() {
             self.rows.push("".to_string());
@@ -592,6 +609,25 @@ impl Editor {
             }
         }
     }
+
+    pub fn find(&mut self) -> Result<()> {
+        let query = match self.prompt("Search")? {
+            Some(s) => s,
+            None => return Ok(()),
+        };
+        for i in 0..self.rows.len() {
+            match self.rows[i].render().find(query.as_str()) {
+                Some(pos) => {
+                    self.cy = i;
+                    self.cx = self.rx_to_cx(self.rows[i].render(), pos);
+                    self.rowoff = self.rows.len();
+                    break;
+                },
+                None => {},
+            }
+        }
+        Ok(())
+    }
 }
 
 fn main() {
@@ -599,7 +635,7 @@ fn main() {
     editor.init();
     editor.open("./test.txt").unwrap();
 
-    editor.set_status_msg("HELP: Ctrl-S = save | Ctrl-Q = quit");
+    editor.set_status_msg("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
 
     loop {
         editor.refresh_screen().unwrap();
