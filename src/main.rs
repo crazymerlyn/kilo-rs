@@ -623,15 +623,44 @@ impl Editor {
         let saved_coloff = self.coloff;
         let saved_rowoff = self.rowoff;
 
+        let mut last_match: isize = -1;
+        let mut direction: isize = 1;
+
         let query = self.prompt("Search", |editor: &mut Editor, query: &str, key| {
-            if key == Key::Return || key == Key::Char(b'\x1b') {
-                return;
+            match key {
+                Key::Return | Key::Char(b'\x1b') => {
+                    last_match = -1;
+                    direction = 1;
+                    return;
+                }
+                Key::Right | Key::Down => {
+                    direction = 1;
+                }
+                Key::Left | Key::Up => {
+                    direction = -1;
+                }
+                _ => {
+                    last_match = -1;
+                    direction = 1;
+                }
             }
-            for i in 0..editor.rows.len() {
-                match editor.rows[i].render().find(query) {
+            if last_match == -1 {
+                direction = 1;
+            }
+            let mut current = last_match;
+
+            for _ in 0..editor.rows.len() {
+                current += direction;
+                if current == -1 { current = editor.rows.len() as isize - 1 }
+                else if current == editor.rows.len() as isize { current = 0; };
+
+                let row = &editor.rows[current as usize];
+
+                match row.render().find(query) {
                     Some(pos) => {
-                        editor.cy = i;
-                        editor.cx = editor.rx_to_cx(editor.rows[i].render(), pos);
+                        last_match = current;
+                        editor.cy = current as usize;
+                        editor.cx = editor.rx_to_cx(row.render(), pos);
                         editor.rowoff = editor.rows.len();
                         break;
                     },
