@@ -568,7 +568,7 @@ impl Editor {
         let message = message.as_ref();
         let mut input = "".to_string();
         loop {
-            self.set_status_msg(format!("{}: {}", message, input));
+            self.set_status_msg(format!("{}: {} (ESC to cancel)", message, input));
             self.refresh_screen()?;
             match self.read_key()? {
                 Key::Del | Key::Backspace | Key::Ctrl(b'h') => {
