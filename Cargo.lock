@@ -1,11 +1,3 @@
-[root]
-name = "kilo"
-version = "0.1.0"
-dependencies = [
- "termios 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "termsize 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
 [[package]]
 name = "atty"
 version = "0.1.2"
@@ -23,6 +15,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "kilo"
+version = "0.1.0"
+dependencies = [
+ "termios 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "termsize 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
